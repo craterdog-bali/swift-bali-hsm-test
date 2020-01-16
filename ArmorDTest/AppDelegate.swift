@@ -8,12 +8,10 @@
 
 import Cocoa
 import SwiftUI
+import BDN
 import ArmorD
+import Repository
 
-func randomBytes(size: Int) -> [UInt8] {
-    let bytes = [UInt8](repeating: 0, count: size).map { _ in UInt8.random(in: 0..<255) }
-    return bytes
-}
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -45,14 +43,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     class FlowController: FlowControl {
         var step = 0
-        var bytesLess = randomBytes(size: 510 - 34 - 3)   // one byte less than a block
-        var bytesEqual = randomBytes(size: 510 - 34 - 2)  // exactly one block
-        var bytesMore = randomBytes(size: 510 - 34 - 1)   // one byte more than a block
-        var bytesLong = randomBytes(size: 1024)
+        var account = formatter.generateTag()
+        var bytesLess = formatter.generateBytes(size: 510 - 34 - 3)   // one byte less than a block
+        var bytesEqual = formatter.generateBytes(size: 510 - 34 - 2)  // exactly one block
+        var bytesMore = formatter.generateBytes(size: 510 - 34 - 1)   // one byte more than a block
+        var bytesLong = formatter.generateBytes(size: 1024)
         var signature: [UInt8]?
         var digest: [UInt8]?
-        var mobileKey = randomBytes(size: 32)
+        var mobileKey = formatter.generateBytes(size: 32)
         var publicKey: [UInt8]?
+        var certificate: Document?
 
         func stepFailed(device: ArmorD, error: String) {
             print("Step failed: \(error)")
@@ -62,6 +62,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         func nextStep(device: ArmorD, result: [UInt8]?) {
+            var content: Content?
+            var bytes: [UInt8]?
             step += 1
             print("nextStep: \(step)")
             switch (step) {
@@ -73,7 +75,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 case 3:
                     print("Keys generated: \(String(describing: result))")
                     if result != nil { publicKey = result }
-                    device.processRequest(type: "signBytes", mobileKey, bytesLess)
+                    content = Certificate(publicKey: formatter.base32Encode(bytes: publicKey!))
+                    certificate = Document(account: account, content: content!)
+                    bytes = [UInt8](certificate!.format().utf8)
+                    device.processRequest(type: "signBytes", mobileKey, bytes!)
                 case 4:
                     print("Bytes signed: \(String(describing: result))")
                     if result != nil { signature = result }
