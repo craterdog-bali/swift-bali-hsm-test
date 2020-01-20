@@ -48,11 +48,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var bytesEqual = formatter.generateBytes(size: 510 - 34 - 2)  // exactly one block
         var bytesMore = formatter.generateBytes(size: 510 - 34 - 1)   // one byte more than a block
         var bytesLong = formatter.generateBytes(size: 1024)
-        var signature: [UInt8]?
-        var digest: [UInt8]?
         var mobileKey = formatter.generateBytes(size: 32)
         var publicKey: [UInt8]?
+        var credentials: Document?
         var certificate: Document?
+        var certificateCitation: Citation?
+        var transaction: Document?
 
         func stepFailed(device: ArmorD, error: String) {
             print("Step failed: \(error)")
@@ -62,54 +63,74 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         func nextStep(device: ArmorD, result: [UInt8]?) {
-            var content: Content?
-            var bytes: [UInt8]?
             step += 1
             print("nextStep: \(step)")
             switch (step) {
                 case 1:
                     device.processRequest(type: "eraseKeys")
                 case 2:
-                    print("Keys erased: \(String(describing: result))")
+                    print("Key erased: \(String(describing: result))")
                     device.processRequest(type: "generateKeys", mobileKey)
                 case 3:
-                    print("Keys generated: \(String(describing: result))")
-                    if result != nil { publicKey = result }
-                    content = Certificate(publicKey: formatter.base32Encode(bytes: publicKey!))
-                    certificate = Document(account: account, content: content!)
-                    bytes = [UInt8](certificate!.format().utf8)
-                    device.processRequest(type: "signBytes", mobileKey, bytes!)
+                    print("Key generated: \(String(describing: result))")
+                    publicKey = result!
+                    let content = Certificate(publicKey: publicKey!)
+                    certificate = Document(account: account, content: content)
+                    let bytes = [UInt8](certificate!.format().utf8)
+                    device.processRequest(type: "signBytes", mobileKey, bytes)
                 case 4:
-                    print("Bytes signed: \(String(describing: result))")
-                    if result != nil { signature = result }
-                    device.processRequest(type: "validSignature", publicKey!, signature!, bytesLess)
+                    print("Certificate signed: \(String(describing: result))")
+                    let content = certificate!.content
+                    let signature = result!
+                    certificate = Document(account: account, content: content, signature: signature)
+                    let bytes = [UInt8](certificate!.format().utf8)
+                    device.processRequest(type: "digestBytes", bytes)
                 case 5:
-                    print("Bytes validated: \(String(describing: result))")
-                    device.processRequest(type: "signBytes", mobileKey, bytesEqual)
+                    print("Certificate digested: \(String(describing: result))")
+                    var content = certificate!.content
+                    let tag = content.tag
+                    let version = content.version
+                    let digest = result!
+                    certificateCitation = Citation(tag: tag, version: version, digest: digest)
+                    content = Credentials()
+                    credentials = Document(account: account, content: content, certificate: certificateCitation)
+                    let bytes = [UInt8](credentials!.format().utf8)
+                    device.processRequest(type: "signBytes", mobileKey, bytes)
                 case 6:
-                    print("Bytes signed: \(String(describing: result))")
-                    if result != nil { signature = result }
-                    device.processRequest(type: "validSignature", publicKey!, signature!, bytesEqual)
+                    print("Credentials signed: \(String(describing: result))")
+                    let bytes = [UInt8](credentials!.format().utf8)
+                    let content = credentials!.content
+                    let signature = result!
+                    credentials = Document(account: account, content: content, certificate: certificateCitation, signature: signature)
+                    device.processRequest(type: "validSignature", publicKey!, signature, bytes)
                 case 7:
-                    print("Bytes validated: \(String(describing: result))")
-                    device.processRequest(type: "signBytes", mobileKey, bytesMore)
+                    print("Credentials validated: \(String(describing: result))")
+                    repository.writeDocument(credentials: credentials!, document: certificate!)
+                    var content = certificate!.content
+                    let name = "/bali/examples/certificate"
+                    let version = content.version
+                    repository.writeCitation(credentials: credentials!, name: name, version: version, citation: certificateCitation!)
+                    content = Transaction(merchant: "Starbucks", amount: "$4.95")
+                    transaction = Document(account: account, content: content, certificate: certificateCitation)
+                    let bytes = [UInt8](transaction!.format().utf8)
+                    device.processRequest(type: "signBytes", mobileKey, bytes)
                 case 8:
-                    print("Bytes signed: \(String(describing: result))")
-                    if result != nil { signature = result }
-                    device.processRequest(type: "validSignature", publicKey!, signature!, bytesMore)
+                    print("Transaction signed: \(String(describing: result))")
+                    let content = transaction!.content
+                    let signature = result!
+                    transaction = Document(account: account, content: content, certificate: certificateCitation, signature: signature)
+                    let bytes = [UInt8](transaction!.format().utf8)
+                    device.processRequest(type: "digestBytes", bytes)
                 case 9:
-                    print("Bytes validated: \(String(describing: result))")
-                    device.processRequest(type: "signBytes", mobileKey, bytesLong)
-                case 10:
-                    print("Bytes signed: \(String(describing: result))")
-                    if result != nil { signature = result }
-                    device.processRequest(type: "validSignature", publicKey!, signature!, bytesLong)
-                case 11:
-                    print("Signature validated: \(String(describing: result))")
-                    device.processRequest(type: "digestBytes", bytesMore)
-                case 12:
-                    print("Bytes digested: \(String(describing: result))")
-                    if result != nil { digest = result }
+                    print("Transaction digested: \(String(describing: result))")
+                    let content = transaction!.content
+                    let tag = content.tag
+                    let version = content.version
+                    let digest = result!
+                    let citation = Citation(tag: tag, version: version, digest: digest)
+                    repository.writeDocument(credentials: credentials!, document: transaction!)
+                    let name = "/bali/examples/transaction"
+                    repository.writeCitation(credentials: credentials!, name: name, version: version, citation: citation)
                     device.processRequest(type: "eraseKeys")
                 default:
                     return  // done
