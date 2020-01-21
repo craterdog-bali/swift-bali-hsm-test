@@ -64,11 +64,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 case 1:
                     device.processRequest(type: "eraseKeys")
                 case 2:
-                    print("Key erased: \(String(describing: result))")
+                    print("Key erased: " + (result![0] == 1 ? "true" : "false"))
                     device.processRequest(type: "generateKeys", mobileKey)
                 case 3:
                     if result != nil {
-                        print("Key generated: \(String(describing: result))")
+                        print("Key generated: \(formatter.base32Encode(bytes: result!))")
                         let content = Certificate(publicKey: result!)
                         certificate = Document(account: account, content: content)
                     }
@@ -76,15 +76,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     device.processRequest(type: "signBytes", mobileKey, bytes)
                 case 4:
                     if result != nil {
-                        print("Certificate signed: \(String(describing: result))")
-                        let content = certificate!.content
-                        certificate = Document(account: account, content: content, signature: result!)
+                        print("Certificate signed: \(formatter.base32Encode(bytes: result!))")
+                        certificate!.signature = result!
                     }
                     let bytes = [UInt8](certificate!.format().utf8)
                     device.processRequest(type: "digestBytes", bytes)
                 case 5:
                     if result != nil {
-                        print("Certificate digested: \(String(describing: result))")
+                        print("Certificate digested: \(formatter.base32Encode(bytes: result!))")
                         let tag = certificate!.content.tag
                         let version = certificate!.content.version
                         certificateCitation = Citation(tag: tag, version: version, digest: result!)
@@ -95,30 +94,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     device.processRequest(type: "signBytes", mobileKey, bytes)
                 case 6:
                     if result != nil {
-                        print("Credentials signed: \(String(describing: result))")
-                        var content = credentials!.content
-                        credentials = Document(account: account, content: content, certificate: certificateCitation, signature: result!)
+                        print("Credentials signed: \(formatter.base32Encode(bytes: result!))")
+                        credentials!.signature = result!
                         repository.writeDocument(credentials: credentials!, document: certificate!)
                         let name = "/bali/examples/certificate"
                         let version = certificate!.content.version
                         repository.writeCitation(credentials: credentials!, name: name, version: version, citation: certificateCitation!)
-                        content = Transaction(merchant: "Starbucks", amount: "$4.95")
+                        let content = Transaction(merchant: "Starbucks", amount: "$4.95")
                         transaction = Document(account: account, content: content, certificate: certificateCitation)
                     }
                     let bytes = [UInt8](transaction!.format().utf8)
                     device.processRequest(type: "signBytes", mobileKey, bytes)
                 case 7:
                     if result != nil {
-                        print("Transaction signed: \(String(describing: result))")
-                        let content = transaction!.content
-                        transaction = Document(account: account, content: content, certificate: certificateCitation, signature: result!)
+                        print("Transaction signed: \(formatter.base32Encode(bytes: result!))")
+                        transaction!.signature = result!
                         repository.writeDocument(credentials: credentials!, document: transaction!)
                     }
                     let bytes = [UInt8](transaction!.format().utf8)
                     device.processRequest(type: "digestBytes", bytes)
                 case 8:
                     if result != nil {
-                        print("Transaction digested: \(String(describing: result))")
+                        print("Transaction digested: \(formatter.base32Encode(bytes: result!))")
                         let name = "/bali/examples/transaction"
                         let tag = transaction!.content.tag
                         let version = transaction!.content.version
