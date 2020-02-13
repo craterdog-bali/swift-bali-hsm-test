@@ -96,7 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if result != nil {
                         print("Credentials signed: \(formatter.base32Encode(bytes: result!))")
                         credentials!.signature = result!
-                        repository.writeDocument(credentials: credentials!, document: certificate!)
+                        repository.writeDocument(credentials: credentials!, digest: certificateCitation!.digest, document: certificate!)
                         let name = "/bali/examples/certificate"
                         let version = certificate!.content.version
                         repository.writeCitation(credentials: credentials!, name: name, version: version, citation: certificateCitation!)
@@ -109,13 +109,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if result != nil {
                         print("Transaction signed: \(formatter.base32Encode(bytes: result!))")
                         transaction!.signature = result!
-                        repository.writeDocument(credentials: credentials!, document: transaction!)
                     }
                     let bytes = [UInt8](transaction!.format().utf8)
                     device.processRequest(type: "digestBytes", bytes)
                 case 8:
                     if result != nil {
                         print("Transaction digested: \(formatter.base32Encode(bytes: result!))")
+                        repository.writeDocument(credentials: credentials!, digest: result!
+                            , document: transaction!)
                         let name = "/bali/examples/transaction"
                         let tag = transaction!.content.tag
                         let version = transaction!.content.version
